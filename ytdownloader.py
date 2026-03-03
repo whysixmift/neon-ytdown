@@ -112,10 +112,10 @@ class YoutubeDownloaderApp:
     def _build_ui(self) -> None:
         self._setup_styles()
 
-        main = ttk.Frame(self.root, style="Main.TFrame", padding=16)
+        main = ttk.Frame(self.root, style="Main.TFrame", padding=12)
         main.pack(fill="both", expand=True)
 
-        header = ttk.Frame(main, style="Card.TFrame", padding=(14, 12))
+        header = ttk.Frame(main, style="Card.TFrame", padding=(12, 10))
         header.pack(fill="x")
         ttk.Label(header, text=APP_TITLE, style="Title.TLabel").pack(anchor="w")
         ttk.Label(
@@ -123,21 +123,13 @@ class YoutubeDownloaderApp:
             text="Queue-based yt-dlp GUI with preview, scheduler, and richer download controls",
             style="Subtle.TLabel",
         ).pack(anchor="w", pady=(2, 0))
-        ttk.Label(
-            header,
-            text=(
-                "Shortcuts: Ctrl+Enter quick download | Ctrl+Shift+A add queue | "
-                "F5 start queue | Ctrl+L clear log | Ctrl+Shift+L view saved log"
-            ),
-            style="Subtle.TLabel",
-        ).pack(anchor="w", pady=(2, 0))
 
-        input_card = ttk.LabelFrame(main, text="Input", style="Card.TLabelframe", padding=12)
-        input_card.pack(fill="x", pady=(12, 0))
+        input_card = ttk.LabelFrame(main, text="Input", style="Card.TLabelframe", padding=10)
+        input_card.pack(fill="x", pady=(8, 0))
 
         ttk.Label(input_card, text="Paste YouTube link(s), one per line:").pack(anchor="w")
-        self.links_text = scrolledtext.ScrolledText(input_card, height=6, wrap="word")
-        self.links_text.pack(fill="x", pady=(6, 10))
+        self.links_text = scrolledtext.ScrolledText(input_card, height=4, wrap="word")
+        self.links_text.pack(fill="x", pady=(4, 8))
 
         recent_row = ttk.Frame(input_card)
         recent_row.pack(fill="x")
@@ -147,8 +139,13 @@ class YoutubeDownloaderApp:
         self.history_combo.pack(side="left", fill="x", expand=True)
         ttk.Button(recent_row, text="Insert", command=self.insert_history_link).pack(side="left", padx=(8, 0))
 
-        options = ttk.LabelFrame(main, text="Options", style="Card.TLabelframe", padding=12)
-        options.pack(fill="x", pady=(12, 0))
+        action_row = ttk.Frame(main, style="Card.TFrame", padding=(10, 8))
+        action_row.pack(fill="x", pady=(8, 0))
+        self.download_btn = ttk.Button(action_row, text="Download", style="Primary.TButton", command=self.quick_download)
+        self.download_btn.pack(side="left")
+
+        options = ttk.LabelFrame(main, text="Options", style="Card.TLabelframe", padding=8)
+        options.pack(fill="x", pady=(8, 0))
 
         ttk.Label(options, text="Content type:").grid(row=0, column=0, sticky="w", padx=(0, 8))
         self.media_type_var = tk.StringVar(value="Video")
@@ -180,17 +177,17 @@ class YoutubeDownloaderApp:
             width=10,
         ).grid(row=0, column=5, sticky="w")
 
-        ttk.Label(options, text="Max items:").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(10, 0))
+        ttk.Label(options, text="Max items:").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
         self.count_var = tk.StringVar(value="1")
         ttk.Spinbox(options, from_=1, to=9999, textvariable=self.count_var, width=8).grid(
             row=1,
             column=1,
             sticky="w",
             padx=(0, 16),
-            pady=(10, 0),
+            pady=(6, 0),
         )
 
-        ttk.Label(options, text="Name template:").grid(row=1, column=2, sticky="w", padx=(0, 8), pady=(10, 0))
+        ttk.Label(options, text="Name template:").grid(row=1, column=2, sticky="w", padx=(0, 8), pady=(6, 0))
         self.filename_template_label_var = tk.StringVar(value="Title")
         ttk.Combobox(
             options,
@@ -198,9 +195,9 @@ class YoutubeDownloaderApp:
             values=list(FILENAME_TEMPLATES.keys()),
             state="readonly",
             width=22,
-        ).grid(row=1, column=3, columnspan=3, sticky="w", pady=(10, 0))
+        ).grid(row=1, column=3, columnspan=3, sticky="w", pady=(6, 0))
 
-        ttk.Label(options, text="Output folder:").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=(10, 0))
+        ttk.Label(options, text="Output folder:").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
         default_output = os.path.join(os.path.expanduser("~"), "Downloads", "Youtube Downloader")
         self.output_var = tk.StringVar(value=default_output)
         ttk.Entry(options, textvariable=self.output_var).grid(
@@ -208,14 +205,14 @@ class YoutubeDownloaderApp:
             column=1,
             columnspan=4,
             sticky="ew",
-            pady=(10, 0),
+            pady=(6, 0),
         )
         ttk.Button(options, text="Browse", command=self.pick_output_folder).grid(
             row=2,
             column=5,
             sticky="w",
             padx=(8, 0),
-            pady=(10, 0),
+            pady=(6, 0),
         )
 
         self.preview_first_var = tk.BooleanVar(value=False)
@@ -223,42 +220,42 @@ class YoutubeDownloaderApp:
             options,
             text="Preview playlist first (optional)",
             variable=self.preview_first_var,
-        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(12, 0))
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
         self.subtitles_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             options,
             text="Download subtitles",
             variable=self.subtitles_var,
-        ).grid(row=3, column=2, columnspan=2, sticky="w", pady=(12, 0))
+        ).grid(row=3, column=2, columnspan=2, sticky="w", pady=(6, 0))
 
         self.thumbnail_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             options,
             text="Download thumbnail",
             variable=self.thumbnail_var,
-        ).grid(row=3, column=4, columnspan=2, sticky="w", pady=(12, 0))
+        ).grid(row=3, column=4, columnspan=2, sticky="w", pady=(6, 0))
 
-        ttk.Label(options, text="Subtitle langs:").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=(10, 0))
+        ttk.Label(options, text="Subtitle langs:").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
         self.sub_langs_var = tk.StringVar(value="en.*,id.*")
         ttk.Entry(options, textvariable=self.sub_langs_var, width=20).grid(
             row=4,
             column=1,
             sticky="w",
-            pady=(10, 0),
+            pady=(6, 0),
         )
 
-        ttk.Label(options, text="Schedule at (optional):").grid(row=4, column=2, sticky="w", padx=(0, 8), pady=(10, 0))
+        ttk.Label(options, text="Schedule at (optional):").grid(row=4, column=2, sticky="w", padx=(0, 8), pady=(6, 0))
         self.schedule_var = tk.StringVar(value="")
         ttk.Entry(options, textvariable=self.schedule_var, width=20).grid(
             row=4,
             column=3,
             sticky="w",
-            pady=(10, 0),
+            pady=(6, 0),
         )
-        ttk.Label(options, text="YYYY-MM-DD HH:MM").grid(row=4, column=4, sticky="w", pady=(10, 0))
+        ttk.Label(options, text="YYYY-MM-DD HH:MM").grid(row=4, column=4, sticky="w", pady=(6, 0))
 
-        ttk.Label(options, text="After queue done:").grid(row=5, column=0, sticky="w", padx=(0, 8), pady=(10, 0))
+        ttk.Label(options, text="After queue done:").grid(row=5, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
         self.post_action_var = tk.StringVar(value="None")
         ttk.Combobox(
             options,
@@ -266,19 +263,19 @@ class YoutubeDownloaderApp:
             values=POST_ACTIONS,
             state="readonly",
             width=20,
-        ).grid(row=5, column=1, sticky="w", pady=(10, 0))
+        ).grid(row=5, column=1, sticky="w", pady=(6, 0))
 
         for idx in (1, 3, 4):
             options.columnconfigure(idx, weight=1)
 
-        queue_card = ttk.LabelFrame(main, text="Queue", style="Card.TLabelframe", padding=10)
-        queue_card.pack(fill="both", expand=True, pady=(12, 0))
+        queue_card = ttk.LabelFrame(main, text="Queue", style="Card.TLabelframe", padding=8)
+        queue_card.pack(fill="both", expand=True, pady=(8, 0))
 
         self.queue_tree = ttk.Treeview(
             queue_card,
             columns=("id", "status", "quality", "schedule", "link"),
             show="headings",
-            height=8,
+            height=10,
         )
         self.queue_tree.heading("id", text="#")
         self.queue_tree.heading("status", text="Status")
@@ -299,7 +296,7 @@ class YoutubeDownloaderApp:
         self.queue_tree.pack(fill="both", expand=True)
 
         queue_buttons = ttk.Frame(queue_card)
-        queue_buttons.pack(fill="x", pady=(10, 0))
+        queue_buttons.pack(fill="x", pady=(6, 0))
         self.add_queue_btn = ttk.Button(queue_buttons, text="Add to Queue", command=self.add_to_queue)
         self.add_queue_btn.pack(side="left")
         self.start_queue_btn = ttk.Button(queue_buttons, text="Start Queue", command=self.start_queue)
@@ -323,30 +320,28 @@ class YoutubeDownloaderApp:
         self.install_dep_btn.pack(side="right", padx=(8, 0))
 
         summary_row = ttk.Frame(queue_card)
-        summary_row.pack(fill="x", pady=(8, 0))
+        summary_row.pack(fill="x", pady=(6, 0))
         self.queue_summary_var = tk.StringVar(value="Queue: total 0 | pending 0 | running 0 | done 0 | failed 0")
         ttk.Label(summary_row, textvariable=self.queue_summary_var, style="Subtle.TLabel").pack(side="left")
 
-        status_card = ttk.Frame(main, style="Card.TFrame", padding=10)
-        status_card.pack(fill="x", pady=(12, 0))
+        status_card = ttk.Frame(main, style="Card.TFrame", padding=8)
+        status_card.pack(fill="x", pady=(8, 0))
         self.progress_var = tk.DoubleVar(value=0)
         ttk.Progressbar(status_card, variable=self.progress_var, maximum=100).pack(fill="x")
         self.status_var = tk.StringVar(value="Ready")
-        ttk.Label(status_card, textvariable=self.status_var, style="Subtle.TLabel").pack(anchor="w", pady=(6, 0))
+        ttk.Label(status_card, textvariable=self.status_var, style="Subtle.TLabel").pack(anchor="w", pady=(4, 0))
         self.progress_info_var = tk.StringVar(value="")
-        ttk.Label(status_card, textvariable=self.progress_info_var, style="Subtle.TLabel").pack(anchor="w", pady=(2, 0))
+        ttk.Label(status_card, textvariable=self.progress_info_var, style="Subtle.TLabel").pack(anchor="w", pady=(1, 0))
 
-        log_card = ttk.LabelFrame(main, text="Log", style="Card.TLabelframe", padding=10)
-        log_card.pack(fill="both", expand=True, pady=(12, 0))
-        self.log_text = scrolledtext.ScrolledText(log_card, height=12, wrap="word", state="disabled")
+        log_card = ttk.LabelFrame(main, text="Log", style="Card.TLabelframe", padding=8)
+        log_card.pack(fill="x", pady=(8, 0))
+        self.log_text = scrolledtext.ScrolledText(log_card, height=4, wrap="word", state="disabled")
         self.log_text.pack(fill="both", expand=True)
 
         footer_buttons = ttk.Frame(main)
-        footer_buttons.pack(fill="x", pady=(8, 0))
-        self.download_btn = ttk.Button(footer_buttons, text="Quick Download", command=self.quick_download)
-        self.download_btn.pack(side="left")
+        footer_buttons.pack(fill="x", pady=(6, 0))
         self.clear_btn = ttk.Button(footer_buttons, text="Clear Log", command=self.clear_log)
-        self.clear_btn.pack(side="left", padx=(8, 0))
+        self.clear_btn.pack(side="left")
         self.view_log_btn = ttk.Button(footer_buttons, text="View Saved Log", command=self.view_saved_log)
         self.view_log_btn.pack(side="left", padx=(8, 0))
         self.cancel_btn.configure(state="disabled")
