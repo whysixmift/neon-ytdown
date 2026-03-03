@@ -55,6 +55,12 @@ Built with Python + Tkinter, with a queue-first workflow, optional playlist prev
 git clone https://github.com/whysixmift/neon-ytdown.git; Set-Location neon-ytdown; py -m pip install --upgrade pip; py -m pip install -r requirements.txt; py ytdownloader.py
 ```
 
+If `git` is not installed on Windows, use this fallback (download ZIP + install + run):
+
+```powershell
+$repoZip = "$env:TEMP\neon-ytdown-main.zip"; Invoke-WebRequest -Uri "https://github.com/whysixmift/neon-ytdown/archive/refs/heads/main.zip" -OutFile $repoZip; Expand-Archive -Path $repoZip -DestinationPath . -Force; Set-Location .\neon-ytdown-main; py -m pip install --upgrade pip; py -m pip install -r requirements.txt; py ytdownloader.py
+```
+
 ### Terminal (Linux/macOS, clone + install + run)
 
 ```bash
