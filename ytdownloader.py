@@ -14,16 +14,21 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 APP_TITLE = "Youtube Downloader"
 CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".ytdown_gui_config.json")
+LOG_PATH = os.path.join(os.path.expanduser("~"), ".ytdown_gui.log")
 MAX_HISTORY = 25
 MAX_LOG_LINES = 3500
 PROGRESS_PATTERN = re.compile(r"\[download\]\s+(\d+(?:\.\d+)?)%")
 PROGRESS_DETAIL_PATTERN = re.compile(r"\[download\]\s+\d+(?:\.\d+)?%.*? at (?P<speed>\S+)\s+ETA (?P<eta>[0-9:]+)")
 
-QUALITY_PRESETS = {
-    "Best": ["-f", "bv*+ba/b", "--merge-output-format", "mp4"],
-    "1080p": ["-f", "bv*[height<=1080]+ba/b[height<=1080]", "--merge-output-format", "mp4"],
-    "720p": ["-f", "bv*[height<=720]+ba/b[height<=720]", "--merge-output-format", "mp4"],
-    "Audio only": ["-x", "--audio-format", "mp3", "--audio-quality", "0"],
+MEDIA_TYPE_OPTIONS = ["Video", "Audio only"]
+VIDEO_QUALITY_OPTIONS = ["Best", "2160p", "1440p", "1080p", "720p", "480p", "360p"]
+AUDIO_QUALITY_OPTIONS = ["Best", "320k", "256k", "192k", "128k"]
+AUDIO_QUALITY_MAP = {
+    "Best": "0",
+    "320k": "320K",
+    "256k": "256K",
+    "192k": "192K",
+    "128k": "128K",
 }
 
 FILENAME_TEMPLATES = {
@@ -91,6 +96,7 @@ class YoutubeDownloaderApp:
 
         self.task_counter = 0
         self.download_tasks: list[dict] = []
+        self.log_file_lock = threading.Lock()
 
         self.playlist_selection: dict[str, list[int]] = {}
         self.recent_links: list[str] = []
@@ -119,7 +125,10 @@ class YoutubeDownloaderApp:
         ).pack(anchor="w", pady=(2, 0))
         ttk.Label(
             header,
-            text="Shortcuts: Ctrl+Enter quick download | Ctrl+Shift+A add queue | F5 start queue | Ctrl+L clear log",
+            text=(
+                "Shortcuts: Ctrl+Enter quick download | Ctrl+Shift+A add queue | "
+                "F5 start queue | Ctrl+L clear log | Ctrl+Shift+L view saved log"
+            ),
             style="Subtle.TLabel",
         ).pack(anchor="w", pady=(2, 0))
 
@@ -141,26 +150,47 @@ class YoutubeDownloaderApp:
         options = ttk.LabelFrame(main, text="Options", style="Card.TLabelframe", padding=12)
         options.pack(fill="x", pady=(12, 0))
 
-        ttk.Label(options, text="Quality preset:").grid(row=0, column=0, sticky="w", padx=(0, 8))
-        self.quality_var = tk.StringVar(value="Best")
+        ttk.Label(options, text="Content type:").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self.media_type_var = tk.StringVar(value="Video")
         ttk.Combobox(
             options,
-            textvariable=self.quality_var,
-            values=list(QUALITY_PRESETS.keys()),
+            textvariable=self.media_type_var,
+            values=MEDIA_TYPE_OPTIONS,
             state="readonly",
             width=16,
         ).grid(row=0, column=1, sticky="w", padx=(0, 16))
 
-        ttk.Label(options, text="Max items:").grid(row=0, column=2, sticky="w", padx=(0, 8))
+        ttk.Label(options, text="Video quality:").grid(row=0, column=2, sticky="w", padx=(0, 8))
+        self.video_quality_var = tk.StringVar(value="Best")
+        ttk.Combobox(
+            options,
+            textvariable=self.video_quality_var,
+            values=VIDEO_QUALITY_OPTIONS,
+            state="readonly",
+            width=10,
+        ).grid(row=0, column=3, sticky="w", padx=(0, 16))
+
+        ttk.Label(options, text="Audio quality:").grid(row=0, column=4, sticky="w", padx=(0, 8))
+        self.audio_quality_var = tk.StringVar(value="Best")
+        ttk.Combobox(
+            options,
+            textvariable=self.audio_quality_var,
+            values=AUDIO_QUALITY_OPTIONS,
+            state="readonly",
+            width=10,
+        ).grid(row=0, column=5, sticky="w")
+
+        ttk.Label(options, text="Max items:").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(10, 0))
         self.count_var = tk.StringVar(value="1")
         ttk.Spinbox(options, from_=1, to=9999, textvariable=self.count_var, width=8).grid(
-            row=0,
-            column=3,
+            row=1,
+            column=1,
             sticky="w",
             padx=(0, 16),
+            pady=(10, 0),
         )
 
-        ttk.Label(options, text="Name template:").grid(row=0, column=4, sticky="w", padx=(0, 8))
+        ttk.Label(options, text="Name template:").grid(row=1, column=2, sticky="w", padx=(0, 8), pady=(10, 0))
         self.filename_template_label_var = tk.StringVar(value="Title")
         ttk.Combobox(
             options,
@@ -168,20 +198,20 @@ class YoutubeDownloaderApp:
             values=list(FILENAME_TEMPLATES.keys()),
             state="readonly",
             width=22,
-        ).grid(row=0, column=5, sticky="w")
+        ).grid(row=1, column=3, columnspan=3, sticky="w", pady=(10, 0))
 
-        ttk.Label(options, text="Output folder:").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(10, 0))
+        ttk.Label(options, text="Output folder:").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=(10, 0))
         default_output = os.path.join(os.path.expanduser("~"), "Downloads", "Youtube Downloader")
         self.output_var = tk.StringVar(value=default_output)
         ttk.Entry(options, textvariable=self.output_var).grid(
-            row=1,
+            row=2,
             column=1,
             columnspan=4,
             sticky="ew",
             pady=(10, 0),
         )
         ttk.Button(options, text="Browse", command=self.pick_output_folder).grid(
-            row=1,
+            row=2,
             column=5,
             sticky="w",
             padx=(8, 0),
@@ -193,42 +223,42 @@ class YoutubeDownloaderApp:
             options,
             text="Preview playlist first (optional)",
             variable=self.preview_first_var,
-        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(12, 0))
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(12, 0))
 
         self.subtitles_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             options,
             text="Download subtitles",
             variable=self.subtitles_var,
-        ).grid(row=2, column=2, columnspan=2, sticky="w", pady=(12, 0))
+        ).grid(row=3, column=2, columnspan=2, sticky="w", pady=(12, 0))
 
         self.thumbnail_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             options,
             text="Download thumbnail",
             variable=self.thumbnail_var,
-        ).grid(row=2, column=4, columnspan=2, sticky="w", pady=(12, 0))
+        ).grid(row=3, column=4, columnspan=2, sticky="w", pady=(12, 0))
 
-        ttk.Label(options, text="Subtitle langs:").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=(10, 0))
+        ttk.Label(options, text="Subtitle langs:").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=(10, 0))
         self.sub_langs_var = tk.StringVar(value="en.*,id.*")
         ttk.Entry(options, textvariable=self.sub_langs_var, width=20).grid(
-            row=3,
+            row=4,
             column=1,
             sticky="w",
             pady=(10, 0),
         )
 
-        ttk.Label(options, text="Schedule at (optional):").grid(row=3, column=2, sticky="w", padx=(0, 8), pady=(10, 0))
+        ttk.Label(options, text="Schedule at (optional):").grid(row=4, column=2, sticky="w", padx=(0, 8), pady=(10, 0))
         self.schedule_var = tk.StringVar(value="")
         ttk.Entry(options, textvariable=self.schedule_var, width=20).grid(
-            row=3,
+            row=4,
             column=3,
             sticky="w",
             pady=(10, 0),
         )
-        ttk.Label(options, text="YYYY-MM-DD HH:MM").grid(row=3, column=4, sticky="w", pady=(10, 0))
+        ttk.Label(options, text="YYYY-MM-DD HH:MM").grid(row=4, column=4, sticky="w", pady=(10, 0))
 
-        ttk.Label(options, text="After queue done:").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=(10, 0))
+        ttk.Label(options, text="After queue done:").grid(row=5, column=0, sticky="w", padx=(0, 8), pady=(10, 0))
         self.post_action_var = tk.StringVar(value="None")
         ttk.Combobox(
             options,
@@ -236,7 +266,7 @@ class YoutubeDownloaderApp:
             values=POST_ACTIONS,
             state="readonly",
             width=20,
-        ).grid(row=4, column=1, sticky="w", pady=(10, 0))
+        ).grid(row=5, column=1, sticky="w", pady=(10, 0))
 
         for idx in (1, 3, 4):
             options.columnconfigure(idx, weight=1)
@@ -252,12 +282,12 @@ class YoutubeDownloaderApp:
         )
         self.queue_tree.heading("id", text="#")
         self.queue_tree.heading("status", text="Status")
-        self.queue_tree.heading("quality", text="Preset")
+        self.queue_tree.heading("quality", text="Quality")
         self.queue_tree.heading("schedule", text="Schedule")
         self.queue_tree.heading("link", text="Link")
         self.queue_tree.column("id", width=48, anchor="center", stretch=False)
         self.queue_tree.column("status", width=110, anchor="center", stretch=False)
-        self.queue_tree.column("quality", width=120, anchor="center", stretch=False)
+        self.queue_tree.column("quality", width=190, anchor="center", stretch=False)
         self.queue_tree.column("schedule", width=150, anchor="center", stretch=False)
         self.queue_tree.column("link", width=600, anchor="w")
         self.queue_tree.tag_configure("pending", background="#f8fbff")
@@ -317,6 +347,8 @@ class YoutubeDownloaderApp:
         self.download_btn.pack(side="left")
         self.clear_btn = ttk.Button(footer_buttons, text="Clear Log", command=self.clear_log)
         self.clear_btn.pack(side="left", padx=(8, 0))
+        self.view_log_btn = ttk.Button(footer_buttons, text="View Saved Log", command=self.view_saved_log)
+        self.view_log_btn.pack(side="left", padx=(8, 0))
         self.cancel_btn.configure(state="disabled")
 
         self._refresh_queue_summary()
@@ -345,6 +377,7 @@ class YoutubeDownloaderApp:
         self.root.bind("<Control-Shift-A>", lambda _e: self.add_to_queue())
         self.root.bind("<F5>", lambda _e: self.start_queue())
         self.root.bind("<Control-l>", lambda _e: self.clear_log())
+        self.root.bind("<Control-Shift-L>", lambda _e: self.view_saved_log())
 
     def _install_tooltips(self) -> None:
         ToolTip(self.add_queue_btn, "Add current links and options as queued tasks")
@@ -353,6 +386,7 @@ class YoutubeDownloaderApp:
         ToolTip(self.retry_btn, "Move failed/canceled tasks back to pending")
         ToolTip(self.preview_btn, "Preview playlist entries for first link and select items")
         ToolTip(self.download_btn, "Add to queue and start immediately")
+        ToolTip(self.view_log_btn, "Open persisted log viewer")
 
     def _load_config(self) -> dict:
         if not os.path.exists(CONFIG_PATH):
@@ -378,7 +412,15 @@ class YoutubeDownloaderApp:
             )
         )
         self.preview_first_var.set(bool(self.config.get("preview_first", False)))
-        self.quality_var.set(str(self.config.get("quality", "Best")))
+        legacy_quality = str(self.config.get("quality", "Best"))
+        media_type = str(self.config.get("media_type", "Video"))
+        if "audio" in legacy_quality.lower():
+            media_type = "Audio only"
+        if media_type not in MEDIA_TYPE_OPTIONS:
+            media_type = "Video"
+        self.media_type_var.set(media_type)
+        self.video_quality_var.set(str(self.config.get("video_quality", self._legacy_video_quality(legacy_quality))))
+        self.audio_quality_var.set(str(self.config.get("audio_quality", "Best")))
         self.filename_template_label_var.set(str(self.config.get("filename_template_label", "Title")))
         self.subtitles_var.set(bool(self.config.get("download_subtitles", False)))
         self.thumbnail_var.set(bool(self.config.get("download_thumbnail", False)))
@@ -401,7 +443,9 @@ class YoutubeDownloaderApp:
             "count": self.count_var.get().strip(),
             "output_dir": self.output_var.get().strip(),
             "preview_first": self.preview_first_var.get(),
-            "quality": self.quality_var.get().strip(),
+            "media_type": self.media_type_var.get().strip(),
+            "video_quality": self.video_quality_var.get().strip(),
+            "audio_quality": self.audio_quality_var.get().strip(),
             "filename_template_label": self.filename_template_label_var.get().strip(),
             "download_subtitles": self.subtitles_var.get(),
             "download_thumbnail": self.thumbnail_var.get(),
@@ -434,6 +478,42 @@ class YoutubeDownloaderApp:
         self.log_text.configure(state="disabled")
         self.log_line_count = 0
         self.progress_info_var.set("")
+
+    def view_saved_log(self) -> None:
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Saved Log")
+        dialog.geometry("920x520")
+        dialog.minsize(700, 380)
+        dialog.transient(self.root)
+
+        container = ttk.Frame(dialog, padding=12)
+        container.pack(fill="both", expand=True)
+
+        path_var = tk.StringVar(value=f"File: {LOG_PATH}")
+        ttk.Label(container, textvariable=path_var, style="Subtle.TLabel").pack(anchor="w", pady=(0, 8))
+
+        text = scrolledtext.ScrolledText(container, wrap="word")
+        text.pack(fill="both", expand=True)
+
+        def load_log() -> None:
+            try:
+                with open(LOG_PATH, "r", encoding="utf-8") as f:
+                    data = f.read()
+            except FileNotFoundError:
+                data = "(No saved log yet)"
+            except OSError as exc:
+                data = f"Failed to read log: {exc}"
+
+            text.delete("1.0", tk.END)
+            text.insert("1.0", data)
+            text.see(tk.END)
+
+        button_row = ttk.Frame(container)
+        button_row.pack(fill="x", pady=(8, 0))
+        ttk.Button(button_row, text="Refresh", command=load_log).pack(side="left")
+        ttk.Button(button_row, text="Close", command=dialog.destroy).pack(side="right")
+
+        load_log()
 
     def insert_history_link(self) -> None:
         selected = self.history_var.get().strip()
@@ -476,7 +556,36 @@ class YoutubeDownloaderApp:
         self.root.after(120, self._drain_log_queue)
 
     def _log(self, message: str) -> None:
-        self.log_queue.put(message + "\n")
+        line = message + "\n"
+        self.log_queue.put(line)
+        self._write_log_file(message)
+
+    def _write_log_file(self, message: str) -> None:
+        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        line = f"[{stamp}] {message}\n"
+        try:
+            with self.log_file_lock:
+                with open(LOG_PATH, "a", encoding="utf-8") as f:
+                    f.write(line)
+        except OSError:
+            pass
+
+    def _legacy_video_quality(self, legacy_quality: str) -> str:
+        normalized = legacy_quality.strip()
+        if normalized in VIDEO_QUALITY_OPTIONS:
+            return normalized
+        if normalized == "Best":
+            return "Best"
+        if normalized == "1080p":
+            return "1080p"
+        if normalized == "720p":
+            return "720p"
+        return "Best"
+
+    def _build_quality_label(self, media_type: str, video_quality: str, audio_quality: str) -> str:
+        if media_type == "Audio only":
+            return f"Audio ({audio_quality})"
+        return f"Video ({video_quality})"
 
     def _set_status(self, message: str) -> None:
         self.root.after(0, self.status_var.set, message)
@@ -618,9 +727,15 @@ class YoutubeDownloaderApp:
         except ValueError as exc:
             raise ValueError("Jumlah video/lagu harus angka >= 1.") from exc
 
-        quality = self.quality_var.get().strip()
-        if quality not in QUALITY_PRESETS:
-            raise ValueError("Quality preset tidak valid.")
+        media_type = self.media_type_var.get().strip()
+        video_quality = self.video_quality_var.get().strip()
+        audio_quality = self.audio_quality_var.get().strip()
+        if media_type not in MEDIA_TYPE_OPTIONS:
+            raise ValueError("Content type tidak valid.")
+        if video_quality not in VIDEO_QUALITY_OPTIONS:
+            raise ValueError("Video quality tidak valid.")
+        if audio_quality not in AUDIO_QUALITY_OPTIONS:
+            raise ValueError("Audio quality tidak valid.")
 
         output_dir = self.output_var.get().strip()
         if not output_dir:
@@ -645,7 +760,10 @@ class YoutubeDownloaderApp:
                 "id": self._next_task_id(),
                 "url": link,
                 "status": "scheduled" if schedule_at else "pending",
-                "quality": quality,
+                "media_type": media_type,
+                "video_quality": video_quality,
+                "audio_quality": audio_quality,
+                "quality_label": self._build_quality_label(media_type, video_quality, audio_quality),
                 "output_dir": output_dir,
                 "filename_template": template,
                 "filename_template_label": template_label,
@@ -681,7 +799,7 @@ class YoutubeDownloaderApp:
             values=(
                 task["id"],
                 task["status"],
-                task["quality"],
+                task["quality_label"],
                 self._queue_schedule_label(task),
                 task["url"],
             ),
@@ -697,7 +815,7 @@ class YoutubeDownloaderApp:
                 values=(
                     task["id"],
                     task["status"],
-                    task["quality"],
+                    task["quality_label"],
                     self._queue_schedule_label(task),
                     task["url"],
                 ),
@@ -861,7 +979,7 @@ class YoutubeDownloaderApp:
                 self._set_progress(0)
 
                 self._log("-" * 72)
-                self._log(f"Task #{task['id']} ({task['quality']}): {task['url']}")
+                self._log(f"Task #{task['id']} ({task['quality_label']}): {task['url']}")
 
                 try:
                     self._download_task(task)
@@ -897,8 +1015,17 @@ class YoutubeDownloaderApp:
         if not cmd:
             raise RuntimeError("yt-dlp not found. Install it first.")
 
-        quality = task["quality"]
-        cmd += QUALITY_PRESETS[quality]
+        media_type = task["media_type"]
+        if media_type == "Audio only":
+            cmd += ["-x", "--audio-format", "mp3", "--audio-quality", AUDIO_QUALITY_MAP[task["audio_quality"]]]
+        else:
+            video_quality = task["video_quality"]
+            if video_quality == "Best":
+                format_selector = "bv*+ba/b"
+            else:
+                max_height = video_quality.replace("p", "")
+                format_selector = f"bv*[height<={max_height}]+ba/b[height<={max_height}]"
+            cmd += ["-f", format_selector, "--merge-output-format", "mp4"]
 
         output_template = os.path.join(task["output_dir"], task["filename_template"])
         cmd += ["-o", output_template]
@@ -909,7 +1036,7 @@ class YoutubeDownloaderApp:
 
         if task["download_subtitles"]:
             cmd += ["--write-subs", "--sub-langs", task["sub_langs"]]
-            if quality != "Audio only":
+            if media_type != "Audio only":
                 cmd += ["--embed-subs"]
 
         if task["download_thumbnail"]:

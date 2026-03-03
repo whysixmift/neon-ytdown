@@ -30,4 +30,4 @@ jobs:
 
       - name: Syntax check
         run: |
-          python -m py_compile youtube_downloader_gui.py
+          python -m py_compile ytdownloader.py

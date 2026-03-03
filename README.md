@@ -13,8 +13,10 @@ Built with Python + Tkinter, with a queue-first workflow, optional playlist prev
 - Queue controls:
   - Add to queue, start queue, cancel current, retry failed, remove finished
 - Optional playlist preview + selection before downloading
-- Quality presets:
-  - `Best`, `1080p`, `720p`, `Audio only`
+- Flexible quality controls:
+  - Content type: `Video` or `Audio only`
+  - Video quality: `Best`, `2160p`, `1440p`, `1080p`, `720p`, `480p`, `360p`
+  - Audio quality: `Best`, `320k`, `256k`, `192k`, `128k`
 - Metadata options:
   - Subtitle download (`--sub-langs` configurable)
   - Thumbnail download
@@ -29,6 +31,7 @@ Built with Python + Tkinter, with a queue-first workflow, optional playlist prev
 - Built-in `yt-dlp` tools:
   - Check, install, update
 - Live progress, speed, ETA, and rolling logs
+- Saved log file viewer (`~/.ytdown_gui.log`)
 - Persistent local settings + recent link history
 
 ## Keyboard Shortcuts
@@ -37,28 +40,68 @@ Built with Python + Tkinter, with a queue-first workflow, optional playlist prev
 - `Ctrl+Shift+A`: Add to Queue
 - `F5`: Start Queue
 - `Ctrl+L`: Clear Log
+- `Ctrl+Shift+L`: View Saved Log
 
 ## Requirements
 
 - Python 3.10+
 - `tkinter` (usually bundled with Python, install separately on some Linux distros)
 
-Install dependencies:
+## Installation (Windows, Linux, macOS)
+
+### Windows (PowerShell)
+
+```powershell
+py -m pip install --upgrade pip
+py -m pip install -r requirements.txt
+```
+
+### Linux
+
+If `tkinter` is missing, install it first (example for Debian/Ubuntu):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-tk
+```
+
+Then install Python dependencies:
 
 ```bash
 python3 -m pip install -r requirements.txt
 ```
 
-## Run
+### macOS
 
 ```bash
-python3 youtube_downloader_gui.py
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+```
+
+## Run
+
+### Windows (PowerShell)
+
+```powershell
+py ytdownloader.py
+```
+
+### Linux
+
+```bash
+python3 ytdownloader.py
+```
+
+### macOS
+
+```bash
+python3 ytdownloader.py
 ```
 
 ## Usage
 
 1. Paste one or more YouTube links.
-2. Choose quality preset, output folder, and optional metadata settings.
+2. Choose content type, video/audio quality, output folder, and optional metadata settings.
 3. Optional: click **Preview Playlist** and choose entries.
 4. Click **Add to Queue** (or **Quick Download**).
 5. Click **Start Queue**.
@@ -77,7 +120,7 @@ neon-ytdown/
 │   └── workflows/
 │       └── ci.yml
 ├── requirements.txt
-├── youtube_downloader_gui.py
+├── ytdownloader.py
 ├── README.md
 └── .gitignore
 ```
@@ -87,7 +130,7 @@ neon-ytdown/
 Local syntax check:
 
 ```bash
-python3 -m py_compile youtube_downloader_gui.py
+python3 -m py_compile ytdownloader.py
 ```
 
 CI workflow:
