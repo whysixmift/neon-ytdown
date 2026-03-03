@@ -10,6 +10,7 @@ import time
 import tkinter as tk
 from datetime import datetime
 from tkinter import filedialog, messagebox, scrolledtext, ttk
+from urllib.parse import parse_qs, urlparse
 
 
 APP_TITLE = "Youtube Downloader"
@@ -143,9 +144,13 @@ class YoutubeDownloaderApp:
         action_row.pack(fill="x", pady=(8, 0))
         self.download_btn = ttk.Button(action_row, text="Download", style="Primary.TButton", command=self.quick_download)
         self.download_btn.pack(side="left")
+        self.options_visible_var = tk.BooleanVar(value=True)
+        self.options_toggle_btn = ttk.Button(action_row, text="Hide Options", command=self._toggle_options_panel)
+        self.options_toggle_btn.pack(side="left", padx=(8, 0))
 
-        options = ttk.LabelFrame(main, text="Options", style="Card.TLabelframe", padding=8)
-        options.pack(fill="x", pady=(8, 0))
+        self.options_card = ttk.LabelFrame(main, text="Options", style="Card.TLabelframe", padding=8)
+        self.options_card.pack(fill="x", pady=(8, 0))
+        options = self.options_card
 
         ttk.Label(options, text="Content type:").grid(row=0, column=0, sticky="w", padx=(0, 8))
         self.media_type_var = tk.StringVar(value="Video")
@@ -366,6 +371,7 @@ class YoutubeDownloaderApp:
         style.configure("Title.TLabel", font=("Helvetica", 20, "bold"), foreground="#0b2545", background="#ffffff")
         style.configure("Subtle.TLabel", foreground="#4f6179", background="#ffffff")
         style.configure("TButton", padding=6, font=("Helvetica", 10))
+        style.configure("Primary.TButton", padding=7, font=("Helvetica", 10, "bold"))
 
     def _bind_shortcuts(self) -> None:
         self.root.bind("<Control-Return>", lambda _e: self.quick_download())
@@ -381,6 +387,7 @@ class YoutubeDownloaderApp:
         ToolTip(self.retry_btn, "Move failed/canceled tasks back to pending")
         ToolTip(self.preview_btn, "Preview playlist entries for first link and select items")
         ToolTip(self.download_btn, "Add to queue and start immediately")
+        ToolTip(self.options_toggle_btn, "Show or hide the options panel")
         ToolTip(self.view_log_btn, "Open persisted log viewer")
 
     def _load_config(self) -> dict:
@@ -609,10 +616,21 @@ class YoutubeDownloaderApp:
     def _set_busy_state(self, busy: bool) -> None:
         state = "disabled" if busy else "normal"
         self.download_btn.configure(state=state)
+        self.options_toggle_btn.configure(state=state)
         self.preview_btn.configure(state=state)
         self.add_queue_btn.configure(state=state)
         self.start_queue_btn.configure(state=state)
         self.cancel_btn.configure(state="normal" if busy else "disabled")
+
+    def _toggle_options_panel(self) -> None:
+        if self.options_visible_var.get():
+            self.options_card.pack_forget()
+            self.options_visible_var.set(False)
+            self.options_toggle_btn.configure(text="Show Options")
+        else:
+            self.options_card.pack(fill="x", pady=(8, 0), before=self.queue_tree.master)
+            self.options_visible_var.set(True)
+            self.options_toggle_btn.configure(text="Hide Options")
 
     def _set_dependency_buttons_state(self, state: str) -> None:
         self.install_dep_btn.configure(state=state)
@@ -750,8 +768,9 @@ class YoutubeDownloaderApp:
             self._log(f"Hanya ada {len(links)} link. Akan memakai semua link yang tersedia.")
 
         tasks: list[dict] = []
+        per_link_playlist_limit = requested_count if len(selected_links) == 1 else None
         for link in selected_links:
-            task: dict = {
+            base_task: dict = {
                 "id": self._next_task_id(),
                 "url": link,
                 "status": "scheduled" if schedule_at else "pending",
@@ -770,7 +789,8 @@ class YoutubeDownloaderApp:
                 "tries": 0,
                 "error": "",
             }
-            tasks.append(task)
+            expanded = self._expand_playlist_tasks(base_task, max_items=per_link_playlist_limit)
+            tasks.extend(expanded)
 
         self._remember_links(selected_links)
         self._save_config()
@@ -786,6 +806,83 @@ class YoutubeDownloaderApp:
             return schedule_at.strftime("%Y-%m-%d %H:%M")
         return "now"
 
+    def _queue_link_label(self, task: dict) -> str:
+        display_link = str(task.get("display_link") or "").strip()
+        if display_link:
+            return display_link
+        return str(task["url"])
+
+    def _looks_like_playlist_link(self, link: str) -> bool:
+        try:
+            parsed = urlparse(link)
+            query = parse_qs(parsed.query)
+            if "list" in query and any(value.strip() for value in query["list"]):
+                return True
+            return "/playlist" in (parsed.path or "")
+        except ValueError:
+            return "list=" in link or "/playlist" in link
+
+    def _expand_playlist_tasks(self, base_task: dict, max_items: int | None = None) -> list[dict]:
+        selected_items = base_task.get("playlist_items")
+        selected_indexes: list[int] = []
+        if isinstance(selected_items, list):
+            seen: set[int] = set()
+            for item in selected_items:
+                try:
+                    idx = int(item)
+                except (TypeError, ValueError):
+                    continue
+                if idx < 1 or idx in seen:
+                    continue
+                seen.add(idx)
+                selected_indexes.append(idx)
+            selected_indexes.sort()
+
+        should_expand = bool(selected_indexes) or self._looks_like_playlist_link(base_task["url"])
+        if not should_expand:
+            return [base_task]
+
+        try:
+            entries = self._fetch_playlist_entries(base_task["url"])
+        except Exception as exc:  # pylint: disable=broad-except
+            self._log(f"Playlist expand skipped for {base_task['url']}: {exc}")
+            if selected_indexes:
+                fallback: list[dict] = []
+                for idx in selected_indexes:
+                    task = dict(base_task)
+                    task["id"] = self._next_task_id()
+                    task["playlist_items"] = [idx]
+                    task["display_link"] = f"[{idx}] {base_task['url']}"
+                    fallback.append(task)
+                return fallback
+            return [base_task]
+
+        if len(entries) <= 1 and not selected_indexes:
+            return [base_task]
+
+        if selected_indexes:
+            chosen_indexes = selected_indexes
+        else:
+            chosen_indexes = [int(row["index"]) for row in entries if str(row.get("index", "")).isdigit()]
+        if max_items is not None:
+            chosen_indexes = chosen_indexes[:max_items]
+
+        title_by_index = {int(row["index"]): row["title"] for row in entries if str(row.get("index", "")).isdigit()}
+        tasks: list[dict] = []
+        first_item = True
+        for idx in chosen_indexes:
+            task = dict(base_task)
+            if first_item:
+                first_item = False
+            else:
+                task["id"] = self._next_task_id()
+            task["playlist_items"] = [idx]
+            title = title_by_index.get(idx, f"Item {idx}")
+            task["display_link"] = f"[{idx}] {title}"
+            tasks.append(task)
+
+        return tasks or [base_task]
+
     def _add_task_to_ui(self, task: dict) -> None:
         self.queue_tree.insert(
             "",
@@ -796,7 +893,7 @@ class YoutubeDownloaderApp:
                 task["status"],
                 task["quality_label"],
                 self._queue_schedule_label(task),
-                task["url"],
+                self._queue_link_label(task),
             ),
             tags=(task["status"],),
         )
@@ -812,7 +909,7 @@ class YoutubeDownloaderApp:
                     task["status"],
                     task["quality_label"],
                     self._queue_schedule_label(task),
-                    task["url"],
+                    self._queue_link_label(task),
                 ),
                 tags=(task["status"],),
             )
