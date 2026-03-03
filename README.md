@@ -47,55 +47,24 @@ Built with Python + Tkinter, with a queue-first workflow, optional playlist prev
 - Python 3.10+
 - `tkinter` (usually bundled with Python, install separately on some Linux distros)
 
-## Installation (Windows, Linux, macOS)
+## Quick Start (One-Paste)
 
-### Windows (PowerShell)
-
-```powershell
-py -m pip install --upgrade pip
-py -m pip install -r requirements.txt
-```
-
-### Linux
-
-If `tkinter` is missing, install it first (example for Debian/Ubuntu):
-
-```bash
-sudo apt-get update
-sudo apt-get install -y python3-tk
-```
-
-Then install Python dependencies:
-
-```bash
-python3 -m pip install -r requirements.txt
-```
-
-### macOS
-
-```bash
-python3 -m pip install --upgrade pip
-python3 -m pip install -r requirements.txt
-```
-
-## Run
-
-### Windows (PowerShell)
+### Windows PowerShell (clone + install + run)
 
 ```powershell
-py ytdownloader.py
+git clone https://github.com/whysixmift/neon-ytdown.git; Set-Location neon-ytdown; py -m pip install --upgrade pip; py -m pip install -r requirements.txt; py ytdownloader.py
 ```
 
-### Linux
+### Terminal (Linux/macOS, clone + install + run)
 
 ```bash
-python3 ytdownloader.py
+git clone https://github.com/whysixmift/neon-ytdown.git && cd neon-ytdown && python3 -m pip install --upgrade pip && python3 -m pip install -r requirements.txt && python3 ytdownloader.py
 ```
 
-### macOS
+If `tkinter` is missing on Linux (Debian/Ubuntu), install it first:
 
 ```bash
-python3 ytdownloader.py
+sudo apt-get update && sudo apt-get install -y python3-tk
 ```
 
 ## Usage
