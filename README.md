@@ -115,6 +115,30 @@ CI workflow:
 - Installs `requirements.txt`
 - Runs `py_compile`
 
+## Stable Demo Link (GitHub Releases)
+
+Use this permanent link as your demo/install page:
+
+`https://github.com/whysixmift/neon-ytdown/releases/latest`
+
+This repo includes an automated release workflow (`.github/workflows/release.yml`) that:
+
+- Builds a Windows executable with PyInstaller
+- Uploads a ZIP + SHA256 checksum to GitHub Releases
+
+How to publish:
+
+1. Create and push a version tag:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+2. Or run **Actions -> Build and Release -> Run workflow** manually (optional `tag` input).
+
+After the workflow finishes, `releases/latest` points to your newest published binary.
+
 ## Notes
 
 - This app is a GUI wrapper around `yt-dlp`.

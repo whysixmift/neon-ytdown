@@ -1,0 +1,75 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create (example: v1.0.0). If empty, uses manual-<run_number>."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Windows executable
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name neon-ytdown ytdownloader.py
+
+      - name: Package artifact
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/neon-ytdown.exe -DestinationPath neon-ytdown-windows-x64.zip -Force
+          Get-FileHash neon-ytdown-windows-x64.zip -Algorithm SHA256 | Select-Object -ExpandProperty Hash | Out-File -Encoding ascii neon-ytdown-windows-x64.zip.sha256
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-ytdown-windows-x64
+          path: |
+            neon-ytdown-windows-x64.zip
+            neon-ytdown-windows-x64.zip.sha256
+
+      - name: Resolve release tag
+        id: release_tag
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ github.event.inputs.tag }}"
+            if [[ -z "$TAG" ]]; then
+              TAG="manual-${{ github.run_number }}"
+            fi
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            neon-ytdown-windows-x64.zip
+            neon-ytdown-windows-x64.zip.sha256
